@@ -281,7 +281,7 @@ export default function AliceChat() {
                         <TypingText
                           text={message.text}
                           onComplete={() => handleTypingComplete(message.id)}
-                          speed={Math.random() * 20 + 20} // Random speed between 20-40ms for more natural feel
+                          speed={Math.random() * 20 + 20}
                         />
                       ) : (
                         <p>{message.text}</p>
@@ -331,7 +331,7 @@ export default function AliceChat() {
           {/* Input Section */}
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 border-t-4 border-purple-200">
             {/* Emoji Buttons */}
-            <div className="flex justify-center space-x-2 mb-4">
+            {/* <div className="flex justify-center space-x-2 mb-4">
               {emojiReactions.map((emoji, index) => (
                 <button
                   key={index}
@@ -341,7 +341,7 @@ export default function AliceChat() {
                   <span className="text-lg">{emoji}</span>
                 </button>
               ))}
-            </div>
+            </div> */}
 
             {/* Message Input */}
             <div className="flex space-x-3">
@@ -350,7 +350,7 @@ export default function AliceChat() {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your message to Alice here! 😊"
+                placeholder="Type your message to Alice here!"
                 maxLength={500}
                 className="flex-1 px-4 py-3 rounded-2xl border-2 border-purple-300 focus:border-purple-500 focus:outline-none text-gray-700 placeholder-gray-400 font-medium"
                 disabled={isLoading}
