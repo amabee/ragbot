@@ -2,13 +2,13 @@
 # OPENAI_API_KEY=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
 # OPENAI_BASE_URL=https://openrouter.ai/api/v1
 
-GROQ_API_KEY=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
+#GROQ_API_KEY=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
 
 # MODEL
 # OPENAI_MODEL=openai/gpt-oss-20b
 
 # If you have other configs (vector DB paths, etc.)
-CHROMA_DB_DIR=./chroma_db
-CHROMA_API_KEY=ck-E5WNmCgk3hddv6KZ44sP6EE64ATo3WzKFvEF5kKk6tqH
-CHROMA_TENANT=a760bf52-844c-4bc9-82b1-0643ccca6bd3
-CHROMA_DB_NAME=ragbot
+#CHROMA_DB_DIR=./chroma_db
+#CHROMA_API_KEY=ck-E5WNmCgk3hddv6KZ44sP6EE64ATo3WzKFvEF5kKk6tqH
+#CHROMA_TENANT=a760bf52-844c-4bc9-82b1-0643ccca6bd3
+#CHROMA_DB_NAME=ragbot
