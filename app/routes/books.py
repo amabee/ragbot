@@ -1,24 +1,19 @@
-from fastapi import APIRouter, HTTPException
-from ..models.schemas import BooksListResponse
-from ..config import settings
-import logging
+from fastapi import APIRouter
+import sys
+from pathlib import Path
 
-router = APIRouter(prefix="/api/v1", tags=["Books"])
-logger = logging.getLogger(__name__)
+# Add parent directory to path for imports
+current_dir = Path(__file__).parent.parent
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+
+from models.responses import AvailableBooksResponse
+from controllers.book_controller import book_controller
+
+router = APIRouter(prefix="/books", tags=["books"])
 
 
-@router.get("/books", response_model=BooksListResponse)
-async def list_books():
-    """Get list of available books"""
-    try:
-        if not settings.PER_BOOK_DIR.exists():
-            return BooksListResponse(
-                books=[], count=0, error="Books directory not found"
-            )
-
-        books = [d.name for d in settings.PER_BOOK_DIR.iterdir() if d.is_dir()]
-        return BooksListResponse(books=books, count=len(books))
-
-    except Exception as e:
-        logger.error(f"Error listing books: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/", response_model=AvailableBooksResponse, summary="Get Available Books")
+async def get_available_books():
+    """Get list of all available books in the database."""
+    return await book_controller.get_available_books()

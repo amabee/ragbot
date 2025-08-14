@@ -1,28 +1,41 @@
-import os
 from pathlib import Path
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
+from typing import Optional
 
-load_dotenv()
 
-class Settings:
-    # API Settings
-    API_TITLE = "RAG Book Query API"
-    API_DESCRIPTION = "API for querying book content using RAG"
-    API_VERSION = "1.0.0"
-    HOST = "0.0.0.0"
-    PORT = 8000
-    
-    # Model Settings
-    GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-    EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
-    
-    # Database Settings
-    BOOKS_INDEX_DIR = "books_index"
-    PER_BOOK_DIR = Path("chroma_per_book")
-    
-    # Query Settings
-    DEFAULT_BOOK_THRESHOLD = 1.2
-    DEFAULT_CHUNK_THRESHOLD = 1.0
-    DEFAULT_MAX_CHUNKS = 8
+class Settings(BaseSettings):
+    # API Keys (mapped from uppercase env vars)
+    groq_api_key: Optional[str] = None
+
+    # Database settings (mapped from uppercase env vars)
+    chroma_db_dir: str = "./chroma_db"
+    chroma_api_key: Optional[str] = None
+    chroma_tenant: Optional[str] = None
+    chroma_db_name: str = "ragbot"
+
+    # Model settings
+    groq_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    embedding_model: str = "BAAI/bge-large-en-v1.5"
+    spacy_model: str = "en_core_web_sm"
+
+    # Paths
+    books_index_path: str = "books_index"
+    per_book_path: Path = Path("chroma_per_book")
+
+    # Default thresholds
+    default_book_threshold: float = 1.2
+    default_chunk_threshold: float = 1.0
+    default_max_chunks: int = 8
+
+    # Server settings
+    host: str = "0.0.0.0"
+    port: int = 8000
+    log_level: str = "info"
+
+    class Config:
+        env_file = ".env"
+        # This tells Pydantic to automatically map UPPERCASE env vars to lowercase field names
+        case_sensitive = False
+
 
 settings = Settings()

@@ -1,80 +1,75 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
-from .config import settings
-from .routes import health, books, query
-from .services.rag_service import RAGService
-from .services.llm_service import LLMService
-from .controllers.query_controller import QueryController
+from contextlib import asynccontextmanager
 import logging
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Add the current directory to Python path so we can import our modules
+sys.path.append(str(Path(__file__).parent))
+
+from config import settings
+from models.responses import HealthResponse
+from routes import books, query
+from services.ml_service import ml_service
+from services.book_service import book_service
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
 logger = logging.getLogger(__name__)
 
-# Global variables (will be initialized on startup)
-rag_service = None
-llm_service = None
-query_controller = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    # Startup
+    logger.info("🚀 Starting Children's Book Query API...")
+
+    try:
+        await ml_service.initialize_models()
+        await book_service.initialize_database()
+        logger.info("✅ All services initialized successfully!")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize services: {e}")
+        raise
+
+    yield
+
+    # Shutdown
+    logger.info("🛑 Shutting down Children's Book Query API...")
+
 
 # Initialize FastAPI app
 app = FastAPI(
-    title=settings.API_TITLE,
-    description=settings.API_DESCRIPTION,
-    version=settings.API_VERSION,
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    title="Children's Book Query API",
+    description="A RAG-based API for querying children's books with entity-aware search",
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Include routers
-app.include_router(health.router)
-app.include_router(books.router)
-app.include_router(query.router)
+app.include_router(books.router, prefix="/api/v1")
+app.include_router(query.router, prefix="/api/v1")
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize models and databases on startup"""
-    global rag_service, llm_service, query_controller
-
-    try:
-        logger.info("Initializing models and databases...")
-
-        # Initialize embeddings
-        embeddings = HuggingFaceEmbeddings(
-            model_name=settings.EMBEDDING_MODEL,
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
-        )
-
-        # Initialize databases
-        books_index_db = Chroma(
-            persist_directory=settings.BOOKS_INDEX_DIR, embedding_function=embeddings
-        )
-
-        # Initialize services
-        rag_service = RAGService(embeddings, books_index_db)
-        llm_service = LLMService()
-
-        # Initialize controllers
-        query_controller = QueryController(rag_service, llm_service)
-
-        logger.info("✅ All models and databases initialized successfully!")
-
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize: {e}")
-        raise e
+@app.get("/", response_model=HealthResponse, summary="Health Check")
+async def root():
+    """Simple health check endpoint."""
+    return HealthResponse(
+        message="Children's Book Query API is running!", status="healthy"
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT, log_level="info")
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=True,
+        log_level=settings.log_level,
+    )
