@@ -1,0 +1,140 @@
+import os
+from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    TextLoader,
+    PyPDFLoader,
+    Docx2txtLoader,
+    DirectoryLoader
+)
+import shutil
+from pathlib import Path
+
+CHROMA_PATH = "chroma"
+DATA_PATH = "data"  # Changed to directory path
+
+def get_loader_for_file(file_path):
+    """Return appropriate loader based on file extension"""
+    file_extension = Path(file_path).suffix.lower()
+    
+    if file_extension == '.pdf':
+        return PyPDFLoader(file_path)
+    elif file_extension == '.docx':
+        return Docx2txtLoader(file_path)
+    elif file_extension in ['.txt', '.md']:
+        return TextLoader(file_path, encoding="utf-8")
+    else:
+        raise ValueError(f"Unsupported file type: {file_extension}")
+
+def load_documents_from_directory(directory_path):
+    """Load all supported documents from a directory"""
+    documents = []
+    supported_extensions = {'.pdf', '.docx', '.txt', '.md'}
+    
+    for file_path in Path(directory_path).rglob('*'):
+        if file_path.suffix.lower() in supported_extensions:
+            print(f"Loading: {file_path}")
+            try:
+                loader = get_loader_for_file(str(file_path))
+                docs = loader.load()
+                
+                # Add source file info to metadata
+                for doc in docs:
+                    doc.metadata['source_file'] = str(file_path)
+                    doc.metadata['file_type'] = file_path.suffix.lower()
+                
+                documents.extend(docs)
+                print(f"  ✓ Loaded {len(docs)} document(s)")
+            except Exception as e:
+                print(f"  ✗ Error loading {file_path}: {e}")
+    
+    return documents
+
+def load_single_file(file_path):
+    """Load a single file"""
+    print(f"Loading single file: {file_path}")
+    loader = get_loader_for_file(file_path)
+    documents = loader.load()
+    
+    # Add source file info to metadata
+    for doc in documents:
+        doc.metadata['source_file'] = file_path
+        doc.metadata['file_type'] = Path(file_path).suffix.lower()
+    
+    return documents
+
+def generate_data_store():
+    # Remove existing database to avoid dimension conflicts
+    if os.path.exists(CHROMA_PATH):
+        print(f"Removing existing database at {CHROMA_PATH}")
+        shutil.rmtree(CHROMA_PATH)
+    
+    # Load documents based on whether DATA_PATH is a file or directory
+    if os.path.isfile(DATA_PATH):
+        documents = load_single_file(DATA_PATH)
+    elif os.path.isdir(DATA_PATH):
+        documents = load_documents_from_directory(DATA_PATH)
+    else:
+        raise ValueError(f"DATA_PATH must be a valid file or directory: {DATA_PATH}")
+
+    if not documents:
+        print("No documents were loaded!")
+        return
+
+    # Better chunking strategy
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,        # Larger chunks for more context
+        chunk_overlap=100,     # More overlap for continuity
+        length_function=len, 
+        add_start_index=True
+    )
+    chunks = text_splitter.split_documents(documents)
+
+    print(f"Split {len(documents)} documents into {len(chunks)} chunks.")
+    print("Sample chunk:")
+    print(chunks[0].page_content[:200])
+    print(f"Chunk metadata: {chunks[0].metadata}")
+
+  # High-quality embedding models for systems with more RAM (choose one):
+    
+    # Option 1: all-mpnet-base-v2 (~384MB model, excellent all-around performance)
+    # embeddings = HuggingFaceEmbeddings(
+    #     model_name="sentence-transformers/all-mpnet-base-v2",
+    #     model_kwargs={'device': 'cpu'},
+    #     encode_kwargs={'normalize_embeddings': True}
+    # )
+    
+    # Option 2: e5-large-v2 (~1.3GB, very high quality, great for retrieval)
+    # embeddings = HuggingFaceEmbeddings(
+    #     model_name="intfloat/e5-large-v2",
+    #     model_kwargs={'device': 'cpu'},
+    #     encode_kwargs={'normalize_embeddings': True}
+    # )
+    
+    # Option 3: bge-large-en-v1.5 (~1.3GB, state-of-the-art quality)
+    embeddings = HuggingFaceEmbeddings(
+        model_name="BAAI/bge-large-en-v1.5",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    
+    # Option 4: gte-large (~670MB, great balance)
+    # embeddings = HuggingFaceEmbeddings(
+    #     model_name="thenlper/gte-large",
+    #     model_kwargs={'device': 'cpu'},
+    #     encode_kwargs={'normalize_embeddings': True}
+    # )
+
+    # Create new database
+    print("Creating new database with updated embedding model...")
+    db = Chroma.from_documents(chunks, embeddings, persist_directory=CHROMA_PATH)
+    print(f"Saved {len(chunks)} chunks to {CHROMA_PATH}.")
+
+def main():
+    load_dotenv()
+    generate_data_store()
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,118 @@
+import os
+from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    TextLoader,
+    PyPDFLoader,
+    Docx2txtLoader,
+)
+import shutil
+from pathlib import Path
+from langchain.schema import Document
+
+CHROMA_PATH = "chroma"
+DATA_PATH = "data"  
+BOOKS_INDEX_PATH = "books_index"
+
+def get_loader_for_file(file_path):
+    """Return appropriate loader based on file extension"""
+    ext = Path(file_path).suffix.lower()
+    if ext == '.pdf':
+        return PyPDFLoader(file_path)
+    elif ext == '.docx':
+        return Docx2txtLoader(file_path)
+    elif ext in ['.txt', '.md']:
+        return TextLoader(file_path, encoding="utf-8")
+    else:
+        raise ValueError(f"Unsupported file type: {ext}")
+
+def load_single_file(file_path):
+    """Load a single file"""
+    loader = get_loader_for_file(file_path)
+    docs = loader.load()
+    for doc in docs:
+        doc.metadata['source_file'] = file_path
+        doc.metadata['file_type'] = Path(file_path).suffix.lower()
+    return docs
+
+def generate_data_store_per_book():
+    """Create a chroma DB for each book AND a small books index DB"""
+    base_chroma_dir = Path("chroma_per_book")
+    index_dir = Path(BOOKS_INDEX_PATH)
+
+    # Clear old DBs
+    if base_chroma_dir.exists():
+        shutil.rmtree(base_chroma_dir)
+    if index_dir.exists():
+        shutil.rmtree(index_dir)
+    base_chroma_dir.mkdir(parents=True, exist_ok=True)
+    index_dir.mkdir(parents=True, exist_ok=True)
+
+    supported_extensions = {'.pdf', '.docx', '.txt', '.md'}
+
+    # Collect all files
+    files = []
+    if os.path.isdir(DATA_PATH):
+        files = [f for f in Path(DATA_PATH).rglob("*") if f.suffix.lower() in supported_extensions]
+    elif os.path.isfile(DATA_PATH):
+        files = [Path(DATA_PATH)]
+    else:
+        raise ValueError(f"DATA_PATH must be valid: {DATA_PATH}")
+
+    if not files:
+        print("No documents found!")
+        return
+
+    # Prepare embeddings & splitter
+    embeddings = HuggingFaceEmbeddings(
+        model_name="BAAI/bge-large-en-v1.5",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=100,
+        length_function=len,
+        add_start_index=True
+    )
+
+    # For books index
+    index_docs = []
+
+    for file_path in files:
+        print(f"\nProcessing file: {file_path}")
+        try:
+            # Load full text and split into chunks
+            documents = load_single_file(str(file_path))
+            chunks = text_splitter.split_documents(documents)
+            print(f"  Split into {len(chunks)} chunks.")
+
+            # Save book-level DB
+            chroma_dir = base_chroma_dir / file_path.stem
+            chroma_dir.mkdir(parents=True, exist_ok=True)
+            db = Chroma.from_documents(chunks, embeddings, persist_directory=str(chroma_dir))
+            print(f"  Saved {len(chunks)} chunks to {chroma_dir}")
+
+            # Prepare book index entry
+            # Use title + first 500 chars as “summary”
+            summary_text = f"{file_path.stem}: {documents[0].page_content[:500]}"
+            index_docs.append(Document(page_content=summary_text, metadata={"book_name": file_path.stem}))
+
+        except Exception as e:
+            print(f"  Error processing {file_path}: {e}")
+
+    # Create the small books_index DB
+    if index_docs:
+        index_db = Chroma.from_documents(index_docs, embeddings, persist_directory=str(index_dir))
+        print(f"\n✅ Created books index DB with {len(index_docs)} entries at {index_dir}")
+
+
+def main():
+    load_dotenv()
+    generate_data_store_per_book()
+
+
+if __name__ == "__main__":
+    main()

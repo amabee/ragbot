@@ -1,0 +1,11 @@
+# Let the system decide threshold automatically
+python query_data.py "What happens to Alice?" --adaptive-threshold
+
+# Use confidence levels instead of fixed thresholds
+python query_data.py "Who is the Mad Hatter?" --confidence MEDIUM
+
+# Debug scoring issues
+python query_data.py "Describe Wonderland" --show-scores --confidence LOW
+
+# Most permissive (replaces your 0.25 threshold)
+python query_data.py "Tell me about the story" --confidence LOW

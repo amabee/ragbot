@@ -1,0 +1,7 @@
+# Ignore all env files
+*.env
+
+
+books_index
+chroma_per_book
+
